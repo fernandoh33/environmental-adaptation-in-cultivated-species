@@ -1,0 +1,24 @@
+#!/bin/bash
+#SBATCH --account=def-rieseber
+#SBATCH --time=0-5:00
+#SBATCH --ntasks=1
+#SBATCH --mem=50G
+#SBATCH --cpus-per-task=30
+
+module load StdEnv/2023 gcc/12.3
+module load vcftools/0.1.16
+module load gemma/0.98.5
+
+vcf=all.chr.A.vcf.gz
+outvcf=GEA.candidates.original.chr.A.vcf.gz
+plink=
+kinship=
+cov=covariates.txt
+
+vcftools --gzvcf $vcf --positions snps.lowLD.txt --recode --stdout |bgzip -c > $outvcf
+
+#mapping with gemma
+for i in `seq 1 25`
+do 
+gemma -bfile #plink -k $kinship -lmm 2 -miss 0.15 -maf 0.05 -c $cov -n $i -o -o GEA.soybean$i
+done
