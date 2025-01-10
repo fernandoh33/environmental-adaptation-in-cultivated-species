@@ -6,19 +6,30 @@
 #SBATCH --cpus-per-task=30
 
 module load StdEnv/2023 gcc/12.3
+module load plink/1.9b_6.21-x86_64
 module load vcftools/0.1.16
 module load gemma/0.98.5
 
-vcf=all.chr.A.vcf.gz
-outvcf=GEA.candidates.original.chr.A.vcf.gz
-plink=
-kinship=
-cov=covariates.txt
+VCF=all.chr.A.vcf.gz
+LOWLDPLINK=lowLD.50.10.0.2.maf0.05
+LANDRACES=landraces.txt
+VCFMAPPING=
+PLINKMAPPING=
+PLINKKINSHIP=
+COVS=
 
-vcftools --gzvcf $vcf --positions snps.lowLD.txt --recode --stdout |bgzip -c > $outvcf
+#filter data to retain samples to use in the mapping and snps in low LD for using to create the kinship matrix
+
+plink --vcf $VCF --double-id --allow-extra-chr --set-missing-var-ids @:# --indep-pairwise 50 10 0.2 --threads 32 --out $LOWLDPLINK
+tr - $'\t' < $LOWLDPLINK.prune.in > $LOWLDPLINK.snps.txt
+vcftools --gzvcf $VCF --keep $LANDRACES --positions $LOWLDPLINK.snps.txt --maf 0.05 --recode --stdout |bgzip -c > $LOWLDPLINK.vcf.gz
+vcftools --gzvcf $VCF --keep $LANDRACES --recode --stdout |bgzip -c > VCFMAPPING.vcf.gz
+plink --vcf $VCFMAPPING.vcf.gz --make-bed --double-id --allow-extra-chr --set-missing-var-ids @:# --threads 32 --out $PLINKMAPPING
+plink --vcf $LOWLDPLINK.vcf.gz --make-bed --double-id --allow-extra-chr --set-missing-var-ids @:# --threads 32  --out $PLINKKINSHIP
+gemma -bfile $PLINKKINSHIP -miss 0.15 -maf 0.05 -gk 2 -o $KINSHIP
 
 #mapping with gemma
 for i in `seq 1 25`
 do 
-gemma -bfile #plink -k $kinship -lmm 2 -miss 0.15 -maf 0.05 -c $cov -n $i -o -o GEA.soybean$i
+gemma -bfile $PLINKMAPPING -k $KINSHIP -lmm 2 -miss 0.15 -maf 0.05 -c $COVS -n $i -o GEA.var$i
 done
